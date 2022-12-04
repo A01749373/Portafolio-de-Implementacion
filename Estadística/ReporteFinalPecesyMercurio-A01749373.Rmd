@@ -1,0 +1,244 @@
+---
+title: 'Reporte final: "Los peces y el mercurio"'
+author: "Ariadna Jocelyn Guzmán Jiménez - A01749373"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+\begin{center} Módulo 1: Estadística para ciencia de datos \end{center}
+
+\begin{center} Inteligencia artificial avanzada para la ciencia de datos II \end{center}
+
+
+\begin{center} Grupo 501 \end{center}
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Resumen
+
+Mediante este trabajo, se presenta la implementación y el análisis de normalidad y componentes para la base de contaminación por mercurio en lagos. Esta problemática, es muy importante ya que además de afectar a los seres vivos del lago, puede afectar a los seres  humanos si llegan a consumir alguno de ellos. Por eso, fue necesario poder realizar un entendimiento de todos los datos para poder enfatizar y lograr a interpretar cuales son las variables candidatas para los modelos. Inicialmente, en el módulo anterior, se había llegado a la conclusión de que **alcalinidad, calcio y clorofila** eran las variables que más afluencia tenían en esta problemática, por lo que con los análisis siguientes, verificaremos los resultados de la anterior entrega.
+
+# Introducción
+
+La contaminación por mercurio de peces en el agua dulce comestibles es una amenaza directa contra nuestra salud. Se llevó a cabo un estudio reciente en 53 lagos de Florida con el fin de examinar los factores que influían en el nivel de contaminación por mercurio. 
+
+En nuestra base de datos, encontramos los siguiente atributos:
+
+* **X1** = número de indentificación
+* **X2** = nombre del lago
+* **X3** = alcalinidad (mg/l de carbonato de calcio)
+* **X4** = PH
+* **X5** = calcio (mg/l)
+* **X6** = clorofila (mg/l)
+* **X7** = concentración media de mercurio (parte por millón) en el tejido muscualar del grupo de peces estudiados en cada lago
+* **X8** = número de peces estudiados en el lago
+* **X9** = mínimo de la concentración de mercurio en cada grupo de peces
+* **X10** = máximo de la concentración de mercurio en cada grupo de peces
+* **X11** = estimación (mediante regresión) de la concentración de mercurio en el pez de 3 años (o promedio de mercurio cuando la edad no está disponible)
+* **X12** = indicador de la edad de los peces (0: jóvenes; 1: maduros)
+
+Dado el anterior análisis de los datos, vemos que las variables $X1, X2$ y $X12$ son variables de clasificación, por lo que para nuestros análisis, no haremos uso de ellas.
+
+Por otra parte, con las descripciones de cada variable nos surgen interesantes las siguientes preguntas para poder resolver y poder ir sobre ellas para hacer hacer predicciones futuras, las cuales son:
+
+* *¿Habrá direfencia significativa entre la concentración de mercurio por la edad de los peces?*
+* *¿Hay evidencia para suponer que la concentración promedio de mercurio en los lagos es dañino para la salud humana?*
+* *¿Cuáles son los principales factores que influyen en el nivel de contaminación por mercurio en los peces de los lagos de Florida?*
+
+
+En las siguientes líneas, se verá la implementación de modelos para la resolución de las preguntas anteriores y llegar a una conclusión concreta de esta problemática.
+
+
+
+# Análisis de los resultados
+
+En la parte de la lectura de datos, importamos nuestra base y por otra parte, hacemos una nueva variable que solo cuente con los datos númericos, ya que son los que nos servirán para nuestros análisis. 
+
+
+```{r}
+datos = read.csv("mercurio.csv")
+
+datos_num = datos[3:11]
+```
+
+
+## Análisis de normalidad
+
+Realice un análisis de normalidad de las variables continuas para identificar variables normales. 
+
+```{r}
+# Librerías requeridas
+library(mnormt) # Normal multivariada
+library(MVN) # Prueba de normalidad multivariada
+library(MASS) # Algebra lineal
+```
+
+
+### Prueba de normalidad de Mardia y prueba de Anderson Darling
+
+```{r}
+mvn(datos_num,subset = NULL,mvn = "mardia", covariance = FALSE,showOutliers = FALSE, alpha = 0.05)
+```
+
+De acuerdo a los resultados anteriores de la prueba de normalidad multivariada, podemos observar que las únicas variables que cuentan con normalidad de nuestro conjunto de datos son $X4$ y $X10$, por lo que volveremos a realizar las pruebas para observar su comportamiento. Por otro lado, si analizamos la variabilidad descriptiva entre estas dos variables con su cociente entre su desviación estándar y su media, podemos ver que $X4$ cuenta con una menor variabilidad a comparación de $X10$, lo que verifica que su media es más confiable.
+
+### Prueba de Mardia y Anderson Darling de las variables que sí tuvieron normalidad 
+
+```{r}
+x4 = datos$X4
+x10 = datos$X10
+datos_norm = data.frame(x4, x10)
+
+mvn(datos_norm,subset = NULL,mvn = "mardia", covariance = FALSE,showOutliers = FALSE, alpha = 0.05)
+```
+
+
+Ambas pruebas nos indican que las muestras proporcionadas provienen de una distribución normal.
+
+Teniendo en cuenta las hipótesis:
+
+
+$H_0$ : Las variables aleatorias en un estudio siguen una distribución normal.
+
+
+
+$H_1$ : Las variables aleatorias en un estudio no siguen una distribución normal. 
+
+Y tomando en cuenta un valor de significancia de 0.05.
+
+Podemos ver que los valores $p$ de la prueba de Anderson-Darling y Mardia, son mayores al valor de significancia, por lo que no podemos rechazar la hipótesis nula y de esta forma tenemos la evidencia suficiente de que los datos **si siguen una distribución normal.**
+
+En el caso del sesgo, podemos observar que se cuenta con un valor de 0.18, indicándonos que la distribución es moderadamente simétrica con respecto a su media y mediana. 
+
+Por otro lado, para la curtosis se tiene un valor de 0.25, mostrando que la distribución 
+
+### Gráfica de contorno de la normal multivariada obtenida en el inciso B.
+
+```{r}
+mvn(datos_norm, mvnTest = "hz", multivariatePlot = "contour")
+```
+
+### Detección de datos atípicos o influyentes en la normal multivariada 
+
+```{r}
+p = 2        #indica que se trata de dos variables
+# Vector de medias
+X = colMeans(datos_norm)
+#Matriz de covarianza
+S = cov(datos_norm)
+
+#Distancia de Mahalanobis
+dM =  mahalanobis(datos_norm,X,S)
+
+
+#Multinormalidad Test gráfico Q-Q Plot
+plot(qchisq(((1:nrow(datos_norm)) - 1/2)/nrow(datos_norm),df=p),sort( dM ) )
+abline(a=0, b=1,col="red")
+
+```
+
+De acuerdo con la gráfica QQplot en base a la distancia de Mahalanobis entre los datos, podemos ver que estos siguen una asimetría negativa, con sesgo a la izquierda.
+
+
+
+
+## Análisis de componentes principales
+
+Realice un análisis de componentes principales con la base de datos completa para identificar los factores principales que intervienen en el problema de la contaminación por mercurio de los peces en agua dulce.
+
+
+
+### ¿Por qué es adecuado el uso de componentes principales para analizar la base?
+
+
+```{r}
+R = cor(datos_num)
+R
+```
+
+El uso de componentes principales se obtiene a través de un proceso de cálculo de raíces y vectores, con el objetivo de contener la mayoría de la varianza observada y evitar la obtención de información no útil, de esta manera, se logra reducir la dimensionalidad del conjunto de datos. Para lograr esto, las variables tienen que ser correlacionadas, por lo que es importante visualizar una matriz de correlación de nuestro conjunto de datos, ya que nos proporciona una matriz cuadrada de dimensión y simétrica, ayudándonos para realizar el proceso de manera adecuada.
+
+
+### Análisis de componentes principales y justificación del número de componentes principales apropiados para reducir la dimensión de la base
+
+
+```{r}
+
+library(FactoMineR)
+library(factoextra)
+library(ggplot2)
+
+cpa = prcomp(datos_num, scale = TRUE) 
+summary(cpa)
+
+
+```
+
+De acuerdo con nuestro análisis, observamos que los componentes principales son aquellos no correlacionados con varianzas lo más grandes posibles. En este caso, para conocerlos aplicamos en nuestra fórmula una escala para poder utilizar la matriz de correlación de nuestro conjunto de datos. En este caso, se observa que el primer componente explica el 59.4% de la varianza de los datos, mientras que el segundo explica el 13.5%.
+
+### Representación en gráficos de los vectores asociados a las variables y las puntuaciones de las observaciones de las dos primeras componentes
+
+```{r}
+
+cp = PCA(datos_num)
+
+fviz_screeplot(cp, addlabels = TRUE)
+
+fviz_pca_ind(cp, col.ind = "blue", addEllipses = TRUE, repel = TRUE, level = 0.95)
+
+fviz_contrib(cp, choice = c("var"))
+
+```
+
+
+### Interpretación de resultados. ¿A qué conclusiones se llega con el análisis y qué significado tienen los componentes seleccionados en el contexto del problema?
+
+En el gráfico de variables, podemos observar una interpretación de los 2 primeros componentes principales, donde el primero, como se mencionó anteriormente, aporta un 59.40%, mientras que el segundo un 13.57%. De misma forma, se visualiza que 5 de las variables se agrupan de manera positiva, mientras que 4 lo hacen de forma negativa.
+
+Por otra parte, en screeplot se muestran los porcentajes de las explicaciones de variaciones totales de cada componente en el conjunto de datos, una representación gráfica de nuestro resultado del comando **prcomp**.
+
+Mediante la gráfica de contribución de variables, podemos observar que las variables que más aporte realizan y que superan el valor medio de la contribución son:
+
+* X11 - Estimación de la concentración de mercurio en el pez
+
+* X7 - Concentración media de mercurio
+
+* X10 - Máximo de la concentración de mercurio
+
+* X9 - Mínimo de la concentración de mercurio
+
+* X3 - Alcalinidad
+
+* X4 - PH
+
+
+# Conclusión
+
+Gracias a el análisis de normalidad en los datos, se pudo conocer cuanto difería la distribución de los datos observados con respecto a lo esperado, esto gracias a las representaciones gráficas y test de hipótesis, como los fueron mardia y anderson-darling. De esta manera, pudimos comprobar que nuestro conjunto de datos, no tuviera una falta de normalidad y evitar la ineficienia en nuestros resultados al contar solo con datos aproximados y no totalmente exactos. Con ello,ya tenemos conciencia de que si existe una normalidad multivariada, que nos permitió dar paso al análisis de componentes principales.
+
+Por otro lado, el análisis de componentes principales, nos permitió realizar una especie de minería de datos, ya que se logró extraer fácilmente información de nuestro conjunto de datos, de esta forma, se logró observar una proyección sobre los datos que son mejor representados en términos de mínimos cuadrados y poder realizar una predicción sobre la resolución de nuestro problema.
+
+Gracias a dicho análisis se pudieron identificar los siguientes componentes como los más importantes:
+
+* X11 - Estimación de la concentración de mercurio en el pez
+* X7 - Concentración media de mercurio
+* X10 - Máximo de la concentración de mercurio
+* X9 - Mínimo de la concentración de mercurio
+* X3 - Alcalinidad
+* X4 - PH
+
+
+Finalmente, de acuerdo con los análisis previamente realizados sobre este problema y los actuales, se logra apreciar que las variables clasificadas como las más importantes en contribución de componentes cpinciden con las que nos dieron un mejor funcionamiento para la implementación de la regresión múltiple. Sin embargo, con ayuda de estos últimos resultados, vemos que la **alcalinidad y el ph** son las que más afluencia tienen en la contaminación por mercurio, ya que son las variables que coincidieron en el análisis de esta entrega y la del módulo anterior. Esto, nos da una nueva perspectiva de entendimiento de los datos, donde podemos enfocarnos sobre dichas variables para obtener nuevos estudios y resultados para la resolución del problema.
+
+
+
+# Anexos
+
+* https://github.com/A01749373/Portafolio-de-Implementacion-A01749373
